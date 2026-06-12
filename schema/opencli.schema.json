@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencli.dev/schema/opencli.schema.json",
+  "title": "OpenCLI Specification",
+  "description": "JSON Schema for describing command-line interfaces, including commands, subcommands, flags, and help metadata.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "opencli",
+    "commands"
+  ],
+  "properties": {
+    "opencli": {
+      "type": "string",
+      "description": "OpenCLI specification version.",
+      "pattern": "^1\\.0\\.\\d+$"
+    },
+    "info": {
+      "$ref": "#/$defs/info"
+    },
+    "commands": {
+      "type": "array",
+      "description": "Top-level commands.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "globalFlags": {
+      "type": "array",
+      "description": "Flags available to all commands.",
+      "items": {
+        "$ref": "#/$defs/flag"
+      }
+    }
+  },
+  "$defs": {
+    "info": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "version"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*$"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short help text shown in command listings."
+        },
+        "description": {
+          "type": "string",
+          "description": "Long description for detailed help output."
+        },
+        "usage": {
+          "type": "string",
+          "description": "Usage text shown in help output."
+        },
+        "hidden": {
+          "type": "boolean",
+          "default": false
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/argument"
+          }
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/flag"
+          }
+        },
+        "subcommands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/command"
+          }
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/example"
+          }
+        }
+      }
+    },
+    "argument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "repeatable": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*$",
+          "description": "Long flag name without leading dashes."
+        },
+        "short": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9]$",
+          "description": "Single-character short flag without leading dash."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "boolean",
+            "string",
+            "integer",
+            "number",
+            "array"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short help text for the flag."
+        },
+        "description": {
+          "type": "string",
+          "description": "Long help text for the flag."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "repeatable": {
+          "type": "boolean",
+          "default": false
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "default": {},
+        "env": {
+          "type": "string",
+          "description": "Environment variable used as fallback value."
+        }
+      }
+    },
+    "example": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
