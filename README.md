@@ -6,4 +6,4 @@ OpenCLI Specification.
 
 The OpenCLI JSON Schema is available at:
 
-- `/home/runner/work/opencli/opencli/opencli-dev/opencli/schema/opencli.schema.json`
+- `schema/opencli.schema.json`
