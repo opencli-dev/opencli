@@ -13,7 +13,7 @@
     "opencli": {
       "type": "string",
       "description": "OpenCLI specification version.",
-      "pattern": "^1\\.0\\.\\d+$"
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
     },
     "info": {
       "$ref": "#/$defs/info"
