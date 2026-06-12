@@ -1,6 +1,6 @@
 # opencli
 
-OpenCLI Specification.
+OpenCLI Specification
 
 ## JSON Schema
 
