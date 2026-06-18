@@ -35,7 +35,7 @@ flags:
     count: true
   - name: timeout
     description: Network timeout for API requests.
-    type: duration
+    format: duration
     default: "30s"
     envVar: STORYDEN_TIMEOUT
 
@@ -55,6 +55,7 @@ commands:
     tags: [nodes]
     commands:
       - name: list
+        operationId: nodeList
         description: List Storyden nodes.
         longDescription: |
           Browse all nodes with plain output, JSON, or JSONL.
@@ -156,6 +157,7 @@ commands:
                 $ref: "#/components/schemas/Node"
 
       - name: get
+        operationId: nodeGet
         description: Get a node by its slug.
         # Positional argument reused from components.
         arguments:
@@ -176,6 +178,7 @@ commands:
                 $ref: "#/components/schemas/Node"
 
       - name: create
+        operationId: nodeCreate
         description: Create a new node.
         longDescription: |
           Create a node from inline content or a file. Content may be HTML, or
@@ -198,7 +201,7 @@ commands:
             type: boolean
           - name: url
             description: External URL to attach as the node's link.
-            type: url
+            format: uri
           - name: tags
             description: Tags to attach (comma-separated).
             repeatable: true
@@ -219,6 +222,7 @@ commands:
           format: text
 
       - name: delete
+        operationId: nodeDelete
         aliases: [rm]
         description: Delete one or more nodes.
         flags:
@@ -253,6 +257,7 @@ commands:
     description: Work with Storyden threads.
     commands:
       - name: get
+        operationId: threadGet
         description: Get a thread by its mark.
         longDescription: |
           Retrieve and display a discussion thread.
@@ -286,6 +291,7 @@ commands:
                 $ref: "#/components/schemas/Thread"
 
       - name: list
+        operationId: threadList
         description: List recent Storyden threads.
         # Every flag here is composed from shared components — no per-command
         # duplication. Adding a new list command reuses the same definitions.
@@ -322,18 +328,19 @@ commands:
     tags: [auth, security]
     commands:
       - name: login
+        operationId: authLogin
         description: Log in to a Storyden instance.
         usage: sd auth login <storyden-api-url> [flags]
         arguments:
           - name: API_URL
             description: The instance's public web/API address.
-            type: url
+            format: uri
             placeholder: storyden-api-url
             required: true
         flags:
           - name: email
             description: Email identity to associate with this login.
-            type: email
+            format: email
           - name: access-key
             description: Authenticate with a Storyden access key instead of OAuth.
             sensitive: true

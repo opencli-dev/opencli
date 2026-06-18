@@ -233,6 +233,16 @@
             "auth"
           ]
         },
+        "operationId": {
+          "type": "string",
+          "description": "A stable, unique identifier for this command that survives renames. Generators derive handler/function names from it, and tooling (e.g. opencli diff) uses it to track a command across versions.",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "examples": [
+            "deployApplication",
+            "nodeList",
+            "authLogin"
+          ]
+        },
         "aliases": {
           "type": "array",
           "description": "Alternative names that invoke the same command.",
@@ -395,8 +405,18 @@
         },
         "type": {
           "$ref": "#/$defs/FlagType",
-          "description": "The data type of the flag value.",
+          "description": "The base data type of the flag value.",
           "default": "string"
+        },
+        "format": {
+          "type": "string",
+          "description": "Semantic format of the value, following JSON Schema's `format` model (e.g. email, uri, uuid, duration, date-time, hostname, ipv4). Applies to string-typed values; used for validation and documentation.",
+          "examples": [
+            "email",
+            "uri",
+            "uuid",
+            "duration"
+          ]
         },
         "default": {
           "description": "The default value when the flag is not provided. Must match the declared flag type.",
@@ -489,13 +509,10 @@
         "integer",
         "number",
         "boolean",
-        "duration",
         "file",
-        "path",
-        "url",
-        "email"
+        "path"
       ],
-      "description": "Allowed data types for flag and argument values. Each type has exactly one canonical spelling.\n\n- string: arbitrary text\n- integer: whole numbers\n- number: decimal numbers\n- boolean: true/false flags (no value needed)\n- duration: time spans like '5m', '1h30s'\n- file: a path to a file (supports '-' for stdin/stdout)\n- path: a filesystem path to a file or directory\n- url: a valid URI\n- email: an email address\n\nValues restricted to a fixed set are expressed with `choices` on the flag or argument, not a dedicated enum type."
+      "description": "The base data type of a flag or argument value.\n\n- string: arbitrary text\n- integer: whole numbers\n- number: decimal numbers\n- boolean: true/false flags (no value needed)\n- file: a path to a file (supports '-' for stdin/stdout)\n- path: a filesystem path to a file or directory\n\nSpecialised string formats (email, uri, uuid, duration, date-time, ...) are expressed with `format` rather than dedicated types, mirroring JSON Schema. Values restricted to a fixed set use `choices`."
     },
     "Argument": {
       "type": "object",
@@ -519,8 +536,16 @@
         },
         "type": {
           "$ref": "#/$defs/FlagType",
-          "description": "The data type of the argument value.",
+          "description": "The base data type of the argument value.",
           "default": "string"
+        },
+        "format": {
+          "type": "string",
+          "description": "Semantic format of the value, following JSON Schema's `format` model (e.g. email, uri, uuid, duration, date-time, hostname, ipv4). Applies to string-typed values.",
+          "examples": [
+            "uri",
+            "uuid"
+          ]
         },
         "required": {
           "type": "boolean",
