@@ -31,3 +31,4 @@ Much like OpenAPI, an OpenCLI spec defines top level schema parts for entrypoint
 - [OpenAPI](https://www.openapis.org/)
 - [AsyncAPI](https://www.asyncapi.com/en)
 - [docopt](http://docopt.org/)
+- [CLIG](https://github.com/cli-guidelines/cli-guidelines)

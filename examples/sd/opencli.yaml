@@ -1,0 +1,483 @@
+# yaml-language-server: $schema=../../schema/opencli.schema.json
+$schema: ../../schema/opencli.schema.json
+
+# OpenCLI specification reverse-engineered from the real `sd` (Storyden) CLI.
+# Scope: a representative subset — `node` / `node list` and `thread` / `thread get`.
+# Where the real tool and our draft schema disagree, we favour fidelity to the
+# real tool; the schema is expected to move towards validating this document.
+
+opencli: "1.0.0"
+
+info:
+  title: sd
+  version: "0.1.0"
+  description: Command-line interface for working with Storyden instances.
+  longDescription: |
+    The **sd** command-line tool provides an interface for working with Storyden
+    instances. Authenticate against an instance's public web/API address with
+    `sd auth login`, then read and write nodes, threads, and other content.
+  homepage: https://github.com/Southclaws/storyden
+  documentationUrl: https://docs.storyden.org/cli
+  binaryName: sd
+  contact:
+    name: Storyden
+    url: https://storyden.org
+  license:
+    name: MPL-2.0
+    url: https://www.mozilla.org/en-US/MPL/2.0/
+
+# Global (persistent) flags inherited by every command.
+# NOTE: invented — the real `sd` currently only exposes -h/--help globally.
+flags:
+  - name: verbose
+    short: v
+    description: Increase log verbosity (-v, -vv, -vvv).
+    count: true
+  - name: timeout
+    description: Network timeout for API requests.
+    type: duration
+    default: "30s"
+    envVar: STORYDEN_TIMEOUT
+
+# Program-wide exit codes; individual commands refine these.
+exitCodes:
+  - code: 0
+    label: OK
+    description: The command completed successfully.
+  - code: 1
+    label: Error
+    description: A generic runtime error occurred.
+
+commands:
+  - name: node
+    aliases: [nodes, n]
+    description: Work with Storyden nodes (pages).
+    tags: [nodes]
+    commands:
+      - name: list
+        description: List Storyden nodes.
+        longDescription: |
+          Browse all nodes with plain output, JSON, or JSONL.
+
+          The default `auto` format prints a plain table that is easy to read in
+          terminals and scripts. Use `sd tui` for the interactive explorer.
+        flags:
+          # --- pagination / streaming (shared via components) ---
+          - $ref: "#/components/flags/all"
+          - $ref: "#/components/flags/page"
+          - $ref: "#/components/flags/limit"
+          - name: depth
+            description: Maximum child depth to return (0 = root nodes only).
+            type: integer
+            default: 0
+
+          # --- hierarchy filters ---
+          - name: parent
+            description: Limit to children of this node (accepts slug; resolves to node id automatically).
+          - name: node-id
+            description: Limit to descendants of this node id.
+          - name: root-only
+            description: Filter to nodes with no parent.
+            type: boolean
+
+          # --- link filters ---
+          - name: has-link
+            description: Filter to nodes that have a link attached.
+            type: boolean
+          - name: no-link
+            description: Filter to nodes that have no link attached.
+            type: boolean
+          - name: link-domain
+            description: Filter to nodes whose link.domain matches; repeatable.
+            repeatable: true
+          - name: link-scheme
+            description: Filter to nodes whose link.url uses this scheme.
+            choices: [http, https]
+          - name: link-url-contains
+            description: Filter to nodes whose link.url contains this substring.
+
+          # --- content filters ---
+          - name: name-contains
+            description: Filter to nodes whose name contains this substring (case-insensitive).
+          - name: owner-handle
+            description: Filter to nodes owned by this account handle.
+          - name: visibility
+            description: "Filter by visibility (comma-separated: draft, review, published, unlisted)."
+            repeatable: true
+            choices: [draft, review, published, unlisted]
+          - name: search
+            short: q
+            description: Server-side full-text search query.
+          - name: author
+            description: Filter by author handle.
+            deprecated: true
+            deprecationMessage: use --owner-handle
+            hidden: true
+
+          # --- server / presentation ---
+          - name: node-format
+            description: "Server response shape: flat (every match) or tree (roots with nested children)."
+            choices: [flat, tree]
+            default: flat
+          # Output format selector + column profile, shared with `thread list`.
+          - $ref: "#/components/flags/list-format"
+          - $ref: "#/components/flags/column-profile"
+
+        flagGroups:
+          - type: mutuallyExclusive
+            flags: [has-link, no-link]
+            description: A node either has a link filter applied or excluded, not both.
+
+        examples:
+          - command: sd node list
+            description: List nodes with the default plain table.
+          - command: sd node list --all --format jsonl
+            description: Stream every page as JSONL.
+          - command: sd node list --link-domain youtube.com --link-domain youtu.be
+            description: Filter by linked domain (repeatable).
+          - command: sd node list --format json > nodes.json
+            description: Export to JSON.
+
+        output:
+          formatFlag: format
+          formats:
+            - format: auto
+              default: true
+              description: Plain table, easy to read in terminals and scripts.
+            - format: plain
+              description: Plain, one-record-per-line tabular text for grep/awk.
+            - format: json
+              description: A JSON array of nodes.
+              schema:
+                $ref: "#/components/schemas/NodeList"
+            - format: jsonl
+              description: One node per line as newline-delimited JSON; pairs with --all.
+              schema:
+                $ref: "#/components/schemas/Node"
+
+      - name: get
+        description: Get a node by its slug.
+        # Positional argument reused from components.
+        arguments:
+          - $ref: "#/components/arguments/node-slug"
+        flags:
+          - $ref: "#/components/flags/format"
+        output:
+          formatFlag: format
+          formats:
+            - format: markdown
+              default: true
+              description: Rich terminal rendering of the node.
+            - format: json
+              schema:
+                $ref: "#/components/schemas/Node"
+            - format: yaml
+              schema:
+                $ref: "#/components/schemas/Node"
+
+      - name: create
+        description: Create a new node.
+        longDescription: |
+          Create a node from inline content or a file. Content may be HTML, or
+          Markdown that is converted to HTML when --markdown is set.
+        flags:
+          - name: name
+            description: Node name.
+            required: true
+          - name: slug
+            description: Node slug (auto-generated if not provided).
+          - name: description
+            description: Node description.
+          - name: content
+            description: Node content as HTML (or Markdown with --markdown).
+          - name: content-file
+            description: Read content from a file (use - for stdin).
+            type: file
+          - name: markdown
+            description: Treat content as Markdown and convert it to HTML.
+            type: boolean
+          - name: url
+            description: External URL to attach as the node's link.
+            type: url
+          - name: tags
+            description: Tags to attach (comma-separated).
+            repeatable: true
+          - name: visibility
+            description: Node visibility.
+            choices: [draft, review, published, unlisted]
+            default: draft
+        flagGroups:
+          # Exactly one content source: inline or file (mutually exclusive + one required).
+          - type: mutuallyExclusive
+            flags: [content, content-file]
+            description: Supply content inline or from a file, not both.
+          - type: oneRequired
+            flags: [content, content-file]
+            description: A node must be created with some content.
+        stdin:
+          description: Node content, used when --content-file is '-'.
+          format: text
+
+      - name: delete
+        aliases: [rm]
+        description: Delete one or more nodes.
+        flags:
+          - name: force
+            short: f
+            description: Skip the confirmation prompt.
+            type: boolean
+          - name: dry-run
+            short: n
+            description: Show the plan without making any changes.
+            type: boolean
+          - name: target
+            description: Target node slug to re-parent orphaned children.
+          - name: from-stdin
+            description: Read identifiers from stdin (one per line).
+            type: boolean
+        arguments:
+          - name: SLUG
+            description: Slugs of the nodes to delete.
+            placeholder: slug
+            required: true
+            variadic: true
+        stdin:
+          description: Node identifiers, one per line, when --from-stdin is set.
+          format: text
+        exitCodes:
+          - code: 2
+            label: NotFound
+            description: One or more of the named nodes did not exist.
+
+  - name: thread
+    description: Work with Storyden threads.
+    commands:
+      - name: get
+        description: Get a thread by its mark.
+        longDescription: |
+          Retrieve and display a discussion thread.
+
+          The default output renders the thread body and metadata richly in your terminal.
+        arguments:
+          - name: THREAD_MARK
+            description: The mark (slug) identifying the thread.
+            placeholder: thread-mark
+            required: true
+        flags:
+          - $ref: "#/components/flags/format"
+        examples:
+          - command: sd thread get my-thread --format json
+            description: Get a thread as JSON.
+          - command: sd thread get my-thread --format yaml
+            description: Get a thread as YAML.
+        output:
+          formatFlag: format
+          formats:
+            - format: markdown
+              default: true
+              description: Rich terminal rendering of the thread body and metadata.
+            - format: json
+              description: The thread as JSON.
+              schema:
+                $ref: "#/components/schemas/Thread"
+            - format: yaml
+              description: The thread as YAML.
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+      - name: list
+        description: List recent Storyden threads.
+        # Every flag here is composed from shared components — no per-command
+        # duplication. Adding a new list command reuses the same definitions.
+        flags:
+          - $ref: "#/components/flags/all"
+          - $ref: "#/components/flags/page"
+          - $ref: "#/components/flags/limit"
+          - $ref: "#/components/flags/list-format"
+          - $ref: "#/components/flags/column-profile"
+        examples:
+          - command: sd thread list
+            description: List recent threads.
+          - command: sd thread list --all --format jsonl
+            description: Stream every thread as JSONL.
+        output:
+          formatFlag: format
+          formats:
+            - format: auto
+              default: true
+              description: Plain table of recent threads.
+            - format: plain
+              description: Plain, one-record-per-line tabular text.
+            - format: json
+              description: A JSON array of threads.
+              schema:
+                $ref: "#/components/schemas/ThreadList"
+            - format: jsonl
+              description: One thread per line as newline-delimited JSON.
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+  - name: auth
+    description: Authenticate with Storyden instances.
+    tags: [auth, security]
+    commands:
+      - name: login
+        description: Log in to a Storyden instance.
+        usage: sd auth login <storyden-api-url> [flags]
+        arguments:
+          - name: API_URL
+            description: The instance's public web/API address.
+            type: url
+            placeholder: storyden-api-url
+            required: true
+        flags:
+          - name: email
+            description: Email identity to associate with this login.
+            type: email
+          - name: access-key
+            description: Authenticate with a Storyden access key instead of OAuth.
+            sensitive: true
+            envVar: STORYDEN_ACCESS_KEY
+          - name: client-id
+            description: OAuth client ID for non-interactive login.
+          - name: client-secret
+            description: OAuth client secret.
+            sensitive: true
+            envVar: STORYDEN_CLIENT_SECRET
+          - name: auth-storage
+            description: Where to store credentials.
+            choices: [auto, credential-store, file]
+            default: auto
+        flagGroups:
+          - type: requiredTogether
+            flags: [client-id, client-secret]
+            description: Non-interactive OAuth login needs both the client ID and secret.
+          - type: mutuallyExclusive
+            flags: [access-key, client-id]
+            description: Use either an access key or OAuth client credentials, not both.
+        stdin:
+          description: The access key, read from stdin instead of passing --access-key.
+          format: text
+        examples:
+          - command: sd auth login https://demo.storyden.org
+            description: Log in interactively via OAuth device flow.
+          - command: STORYDEN_ACCESS_KEY=… sd auth login https://demo.storyden.org --access-key
+            description: Log in non-interactively with an access key from the environment.
+        exitCodes:
+          - code: 4
+            label: AuthFailed
+            description: The instance rejected the supplied credentials.
+
+components:
+  flags:
+    # --- pagination, shared by every list command ---
+    page:
+      name: page
+      description: Page to request.
+      type: integer
+      default: 1
+    limit:
+      name: limit
+      description: Stop after N matches (0 = no limit).
+      type: integer
+      default: 0
+    all:
+      name: all
+      description: Fetch every page, streaming output as it goes.
+      type: boolean
+
+    # --- output controls shared by list commands ---
+    list-format:
+      name: format
+      description: "Output format: auto, plain, json, jsonl."
+      choices: [auto, plain, json, jsonl]
+      default: auto
+    column-profile:
+      name: output
+      short: o
+      description: "Column profile: default, wide."
+      choices: [default, wide]
+      default: default
+
+    # --- shared by single-item "get" commands (thread get, node get) ---
+    format:
+      name: format
+      short: f
+      description: Output format (markdown, json, yaml).
+      choices: [markdown, json, yaml]
+      default: markdown
+
+  arguments:
+    # Shared positional argument for commands that take a single node slug.
+    node-slug:
+      name: SLUG
+      description: The slug identifying the node.
+      placeholder: slug
+      required: true
+
+  schemas:
+    Node:
+      type: object
+      required: [id, slug, name]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+          enum: [draft, review, published, unlisted]
+        link:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            domain:
+              type: string
+            scheme:
+              type: string
+        owner:
+          type: object
+          properties:
+            handle:
+              type: string
+            name:
+              type: string
+
+    NodeList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Node"
+
+    Thread:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+        mark:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        author:
+          type: object
+          properties:
+            handle:
+              type: string
+            name:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ThreadList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Thread"
