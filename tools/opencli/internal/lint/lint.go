@@ -80,6 +80,9 @@ func (l *linter) checkFlagSet(flags []spec.Flag, path string) {
 		if f.Count && f.Repeatable {
 			l.add(fpath, "flag %q sets both count and repeatable, which cannot be combined", f.Name)
 		}
+		if f.SplitOnComma && !f.Repeatable {
+			l.add(fpath, "flag %q sets splitOnComma without repeatable, which has no effect", f.Name)
+		}
 	}
 }
 

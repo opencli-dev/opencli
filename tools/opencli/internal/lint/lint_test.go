@@ -147,6 +147,19 @@ commands:
 	}
 }
 
+func TestSplitOnCommaWithoutRepeatable(t *testing.T) {
+	doc := `
+opencli: "1.0.0"
+commands:
+  - name: go
+    flags:
+      - {name: tags, splitOnComma: true}
+`
+	if !hasMatch(issues(t, doc), "no effect") {
+		t.Error("expected splitOnComma-without-repeatable issue")
+	}
+}
+
 func TestFlagGroupUnknownFlag(t *testing.T) {
 	doc := `
 opencli: "1.0.0"

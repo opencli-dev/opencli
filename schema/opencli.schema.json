@@ -489,9 +489,19 @@
           "description": "When true, the flag can be specified multiple times. Values are collected into a list.",
           "default": false
         },
+        "splitOnComma": {
+          "type": "boolean",
+          "description": "Only meaningful when `repeatable` is true. When true, a single occurrence may also contain comma-separated values (e.g. --tags a,b,c), which are split and merged with values from repeated occurrences — matching Cobra's StringSliceVar. When false (the default), each occurrence is taken as one literal, unsplit value — matching Cobra's StringArrayVar. This distinction matters because a value that legitimately contains a comma (e.g. a PostgREST filter expression) must not be split.",
+          "default": false
+        },
         "count": {
           "type": "boolean",
           "description": "When true, the flag acts as a counter (e.g., -v, -vv, -vvv). Implies type: integer. Cannot be combined with repeatable.",
+          "default": false
+        },
+        "trackChanged": {
+          "type": "boolean",
+          "description": "When true, generators additionally expose whether the flag was explicitly set on the command line (distinct from a Cobra `cmd.Flags().Changed(name)` check), so handler code can tell an explicit value apart from an unset default — e.g. an explicit `--active=false` versus omitting `--active` entirely.",
           "default": false
         },
         "sensitive": {
@@ -512,7 +522,7 @@
         "file",
         "path"
       ],
-      "description": "The base data type of a flag or argument value.\n\n- string: arbitrary text\n- integer: whole numbers\n- number: decimal numbers\n- boolean: true/false flags (no value needed)\n- file: a path to a file (supports '-' for stdin/stdout)\n- path: a filesystem path to a file or directory\n\nSpecialised string formats (email, uri, uuid, duration, date-time, ...) are expressed with `format` rather than dedicated types, mirroring JSON Schema. Values restricted to a fixed set use `choices`."
+      "description": "The base data type of a flag or argument value.\n\n- string: arbitrary text\n- integer: whole numbers\n- number: decimal numbers\n- boolean: true/false flags (no value needed)\n- file: a path to a file (supports '-' for stdin/stdout)\n- path: a filesystem path to a file or directory\n\nSpecialised string formats (email, uri, uuid, duration, date-time, ...) are expressed with `format` rather than dedicated types, mirroring JSON Schema. Generators may map a recognised format to a native type (e.g. `format: uuid` to a UUID type, `format: duration` to a native duration type) even though the declared base `type` stays `string`. Values restricted to a fixed set use `choices`."
     },
     "Argument": {
       "type": "object",
@@ -576,6 +586,11 @@
         "placeholder": {
           "type": "string",
           "description": "Custom placeholder text in usage line. Overrides the default <NAME> format."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "When true, this positional argument carries a secret such as a token or key. As with a sensitive flag, generators must never echo the value; unlike a flag, the value still lands in shell history and process listings, so documentation and generated help should steer users towards a flag, file, or stdin instead.",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -843,7 +858,7 @@
         },
         "schemas": {
           "type": "object",
-          "description": "Reusable JSON Schema (Draft 2020-12) definitions for structured output types and complex flag/argument values. Reference them with a standard JSON Schema `$ref`, e.g. '#/components/schemas/Pod'.",
+          "description": "Reusable JSON Schema (Draft 2020-12) definitions for structured output types and complex flag/argument values. Reference them with a standard JSON Schema `$ref`, e.g. '#/components/schemas/Pod'. These are real JSON Schema documents, not opaque objects: each entry (and every embedded 'output.formats[].schema') is itself validated against the Draft 2020-12 meta-schema, so a malformed entry (an invalid `type` enum value, a `properties` that isn't an object, and so on) is rejected as a structural OpenCLI issue, the same as any other malformed field. Cross-document `$ref`s (pointing outside this document, e.g. into a separate OpenAPI spec) are not yet a supported feature; every `$ref` here must resolve within this document.",
           "additionalProperties": {
             "$ref": "https://json-schema.org/draft/2020-12/schema"
           }

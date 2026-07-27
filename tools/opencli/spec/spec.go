@@ -99,7 +99,9 @@ type Flag struct {
 	Choices            []string `json:"choices,omitempty"`
 	Placeholder        string   `json:"placeholder,omitempty"`
 	Repeatable         bool     `json:"repeatable,omitempty"`
+	SplitOnComma       bool     `json:"splitOnComma,omitempty"`
 	Count              bool     `json:"count,omitempty"`
+	TrackChanged       bool     `json:"trackChanged,omitempty"`
 	Sensitive          bool     `json:"sensitive,omitempty"`
 }
 
@@ -120,6 +122,7 @@ type Argument struct {
 	Variadic    bool     `json:"variadic,omitempty"`
 	Choices     []string `json:"choices,omitempty"`
 	Placeholder string   `json:"placeholder,omitempty"`
+	Sensitive   bool     `json:"sensitive,omitempty"`
 }
 
 // IsRef reports whether this argument is a reference rather than an inline definition.

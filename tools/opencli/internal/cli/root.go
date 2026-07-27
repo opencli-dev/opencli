@@ -23,6 +23,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newValidateCmd())
+	cmd.AddCommand(newGenerateCmd())
 
 	return cmd
 }

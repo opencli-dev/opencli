@@ -76,6 +76,41 @@ commands: [{name: go, flags: [{name: f, type: ` + removed + `}]}]
 	}
 }
 
+// TestEmbeddedSchemaIsRealJSONSchema locks in that components.schemas and
+// output.formats[].schema are validated as genuine JSON Schema (Draft
+// 2020-12) documents, not merely "is this an object". The compiler resolves
+// https://json-schema.org/draft/2020-12/schema to jsonschema/v6's native
+// Draft2020 implementation rather than fetching it, so this holds fully
+// offline — a malformed embedded schema (bad `type` enum value, wrong-shaped
+// `properties`) must surface as a structural issue against the meta-schema.
+func TestEmbeddedSchemaIsRealJSONSchema(t *testing.T) {
+	v := newV(t)
+	spec := []byte(`
+opencli: "1.0.0"
+info: {title: x, version: "1.0.0"}
+commands:
+  - name: get
+    operationId: thingGet
+    output:
+      formatFlag: format
+      formats:
+        - format: json
+          schema:
+            type: not-a-real-json-schema-type
+            properties: "this should be an object, not a string"
+    flags:
+      - {name: format, choices: [json]}
+`)
+	msgs := check(t, v, spec)
+	joined := strings.Join(msgs, "\n")
+	if !strings.Contains(joined, "/schema/type") {
+		t.Errorf("expected the bogus embedded `type` value to be rejected, got: %v", msgs)
+	}
+	if !strings.Contains(joined, "/schema/properties") {
+		t.Errorf("expected the wrong-shaped embedded `properties` to be rejected, got: %v", msgs)
+	}
+}
+
 func TestOneOfInEmbeddedSchema(t *testing.T) {
 	v := newV(t)
 	spec := []byte(`
