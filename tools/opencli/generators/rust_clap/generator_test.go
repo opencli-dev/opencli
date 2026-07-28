@@ -17,7 +17,8 @@ func TestGenerate(t *testing.T) {
 		Info:  &opencliir.Info{Title: "demo", Version: "1.2.3"},
 		Flags: []opencliir.Flag{{Name: "verbose", Short: "v", Count: true}},
 		Commands: []opencliir.Command{{
-			Name: "item",
+			Name:  "item",
+			Flags: []opencliir.Flag{{Name: "output", Type: "path"}},
 			Commands: []opencliir.Command{{
 				Name: "get", OperationID: "itemGet",
 				Arguments: []opencliir.Argument{{Name: "ITEM_ID", Format: "uuid"}},
@@ -37,6 +38,45 @@ func TestGenerate(t *testing.T) {
 	for _, expected := range []string{
 		"pub struct Cli", "pub enum ItemCommand", "pub struct ItemGetArgs",
 		`pub const OPERATION_ID: &'static str = r"itemGet"`, "uuid::Uuid", "ValueEnum",
+		"pub trait Handler", "async fn item_get", "pub async fn dispatch", "std::path::PathBuf",
+		"handler.item_get(",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Errorf("generated source does not contain %q", expected)
+		}
+	}
+}
+
+func TestGenerateDispatchesRunnableParentsAndNestedCommands(t *testing.T) {
+	input := &opencliir.IR{
+		Info:  &opencliir.Info{Title: "demo", Version: "1.2.3"},
+		Flags: []opencliir.Flag{{Name: "verbose", Type: "boolean"}},
+		Commands: []opencliir.Command{
+			{Name: "serve", OperationID: "serveDatabase"},
+			{
+				Name: "schema", OperationID: "inspectSchema",
+				Commands: []opencliir.Command{{Name: "diff", OperationID: "schemaDiff"}},
+			},
+		},
+	}
+
+	files, err := (&generator{module: "generated_cli"}).Generate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(files[0].Content)
+	for _, expected := range []string{
+		"pub struct GlobalArgs",
+		"async fn serve_database(",
+		"args: ServeArgs",
+		"async fn inspect_schema(",
+		"args: SchemaOptions",
+		"async fn schema_diff(",
+		"args: SchemaDiffArgs",
+		"context_schema: &SchemaOptions",
+		"Some(command) => command",
+		"None => handler.inspect_schema(",
+		"self.options",
 	} {
 		if !strings.Contains(source, expected) {
 			t.Errorf("generated source does not contain %q", expected)

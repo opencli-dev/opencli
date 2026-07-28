@@ -55,6 +55,7 @@ type templateData struct {
 	RootAttributes string
 	Globals        []field
 	Commands       []command
+	Operations     []operation
 	Enums          []enum
 	NeedsUUID      bool
 	NeedsDuration  bool
@@ -64,13 +65,28 @@ type templateData struct {
 type command struct {
 	Variant        string
 	ArgsType       string
+	OptionsType    string
 	SubcommandType string
 	Attributes     string
 	Fields         []field
 	Groups         []string
 	Children       []command
+	Ancestors      []ancestor
+	ChildAncestors []ancestor
 	Runnable       bool
 	OperationID    string
+	Method         string
+}
+
+type operation struct {
+	Method    string
+	ArgsType  string
+	Ancestors []ancestor
+}
+
+type ancestor struct {
+	Name string
+	Type string
 }
 
 type field struct {
@@ -133,7 +149,7 @@ func prepare(input *spec.IR) templateData {
 		data.Globals = append(data.Globals, makeFlag(value, "Global", true, enums, &data))
 	}
 	for _, value := range input.Commands {
-		data.Commands = append(data.Commands, makeCommand(value, nil, enums, &data))
+		data.Commands = append(data.Commands, makeCommand(value, nil, nil, enums, &data))
 	}
 	for _, value := range enums {
 		data.Enums = append(data.Enums, value)
@@ -156,7 +172,13 @@ func commandName(input *spec.IR) string {
 	return "cli"
 }
 
-func makeCommand(value spec.Command, parents []string, enums map[string]enum, data *templateData) command {
+func makeCommand(
+	value spec.Command,
+	parents []string,
+	ancestors []ancestor,
+	enums map[string]enum,
+	data *templateData,
+) command {
 	path := append(append([]string{}, parents...), value.Name)
 	typePrefix := ""
 	for _, part := range path {
@@ -164,8 +186,10 @@ func makeCommand(value spec.Command, parents []string, enums map[string]enum, da
 	}
 	result := command{
 		Variant: pascal(value.Name), ArgsType: typePrefix + "Args",
-		SubcommandType: typePrefix + "Command", Runnable: value.OperationID != "",
-		OperationID: rustString(value.OperationID), Attributes: commandAttributes(value),
+		OptionsType: typePrefix + "Options", SubcommandType: typePrefix + "Command",
+		Ancestors: append([]ancestor{}, ancestors...), Runnable: value.OperationID != "",
+		OperationID: rustString(value.OperationID), Method: snake(value.OperationID),
+		Attributes: commandAttributes(value),
 	}
 	for _, flagValue := range value.Flags {
 		result.Fields = append(result.Fields, makeFlag(flagValue, typePrefix, false, enums, data))
@@ -175,8 +199,24 @@ func makeCommand(value spec.Command, parents []string, enums map[string]enum, da
 	}
 	applyRequiredTogether(result.Fields, value.FlagGroups)
 	result.Groups = makeGroups(value.FlagGroups)
+	result.ChildAncestors = append(append([]ancestor{}, ancestors...), ancestor{
+		Name: "context_" + snake(typePrefix),
+		Type: result.OptionsType,
+	})
+	if result.Runnable {
+		argsType := result.ArgsType
+		if len(value.Commands) > 0 {
+			argsType = result.OptionsType
+		}
+		data.Operations = append(data.Operations, operation{
+			Method: result.Method, ArgsType: argsType, Ancestors: result.Ancestors,
+		})
+	}
 	for _, child := range value.Commands {
-		result.Children = append(result.Children, makeCommand(child, path, enums, data))
+		result.Children = append(
+			result.Children,
+			makeCommand(child, path, result.ChildAncestors, enums, data),
+		)
 	}
 	return result
 }
@@ -325,6 +365,8 @@ func scalarType(typeName, format string, data *templateData) string {
 		return "f64"
 	case "boolean":
 		return "bool"
+	case "file", "path":
+		return "std::path::PathBuf"
 	default:
 		return "String"
 	}

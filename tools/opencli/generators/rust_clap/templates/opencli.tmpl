@@ -29,13 +29,19 @@ pub enum {{.Name}} {
 #[derive(Debug, Parser)]
 #[command({{.RootAttributes}})]
 pub struct Cli {
-{{- range .Globals}}
-    #[arg({{.Attributes}})]
-    pub {{.Name}}: {{.Type}},
-{{- end}}
+    #[command(flatten)]
+    pub globals: GlobalArgs,
 
     #[command(subcommand)]
     pub command: RootCommand,
+}
+
+#[derive(Debug, Args)]
+pub struct GlobalArgs {
+{{range .Globals}}
+    #[arg({{.Attributes}})]
+    pub {{.Name}}: {{.Type}},
+{{- end}}
 }
 
 #[derive(Debug, Subcommand)]
@@ -46,18 +52,60 @@ pub enum RootCommand {
 {{- end}}
 }
 
+#[allow(async_fn_in_trait)]
+pub trait Handler {
+    type Error;
+{{range .Operations}}
+    async fn {{.Method}}(
+        &mut self,
+        globals: &GlobalArgs,
+{{- range .Ancestors}}
+        {{.Name}}: &{{.Type}},
+{{- end}}
+        args: {{.ArgsType}},
+    ) -> Result<(), Self::Error>;
+{{- end}}
+}
+
+impl Cli {
+    pub async fn dispatch<H: Handler>(self, handler: &mut H) -> Result<(), H::Error> {
+        self.command.dispatch(&self.globals, handler).await
+    }
+}
+
+impl RootCommand {
+    async fn dispatch<H: Handler>(
+        self,
+        globals: &GlobalArgs,
+        handler: &mut H,
+    ) -> Result<(), H::Error> {
+        match self {
+{{- range .Commands}}
+            Self::{{.Variant}}(args) => args.dispatch(globals, handler).await,
+{{- end}}
+        }
+    }
+}
+
 {{range .Commands}}{{template "node" .}}{{end -}}
 {{- end}}
 
 {{define "node" -}}
 #[derive(Debug, Args)]
+{{- if not .Children}}
 {{- range .Groups}}
 #[group({{.}})]
 {{- end}}
+{{- end}}
 pub struct {{.ArgsType}} {
+{{- if .Children}}
+    #[command(flatten)]
+    pub options: {{.OptionsType}},
+{{- else}}
 {{- range .Fields}}
     #[arg({{.Attributes}})]
     pub {{.Name}}: {{.Type}},
+{{- end}}
 {{- end}}
 {{- if .Children}}
 
@@ -65,11 +113,72 @@ pub struct {{.ArgsType}} {
     pub command: {{if .Runnable}}Option<{{.SubcommandType}}>{{else}}{{.SubcommandType}}{{end}},
 {{- end}}
 }
+{{if .Children}}
+#[derive(Debug, Args)]
+{{- range .Groups}}
+#[group({{.}})]
+{{- end}}
+pub struct {{.OptionsType}} {
+{{- range .Fields}}
+    #[arg({{.Attributes}})]
+    pub {{.Name}}: {{.Type}},
+{{- end}}
+}
+{{end}}
 {{if .Runnable}}
 impl {{.ArgsType}} {
     pub const OPERATION_ID: &'static str = {{.OperationID}};
 }
 {{end}}
+impl {{.ArgsType}} {
+    async fn dispatch<H: Handler>(
+        {{if and .Runnable .Children}}mut {{end}}self,
+        globals: &GlobalArgs,
+{{- range .Ancestors}}
+        {{.Name}}: &{{.Type}},
+{{- end}}
+        handler: &mut H,
+    ) -> Result<(), H::Error> {
+{{- if .Children}}
+{{- if .Runnable}}
+        match self.command.take() {
+            Some(command) => command.dispatch(
+                globals,
+{{- range .Ancestors}}
+                {{.Name}},
+{{- end}}
+                &self.options,
+                handler,
+            ).await,
+            None => handler.{{.Method}}(
+                globals,
+{{- range .Ancestors}}
+                {{.Name}},
+{{- end}}
+                self.options,
+            ).await,
+        }
+{{- else}}
+        self.command.dispatch(
+            globals,
+{{- range .Ancestors}}
+            {{.Name}},
+{{- end}}
+            &self.options,
+            handler,
+        ).await
+{{- end}}
+{{- else if .Runnable}}
+        handler.{{.Method}}(
+            globals,
+{{- range .Ancestors}}
+            {{.Name}},
+{{- end}}
+            self,
+        ).await
+{{- end}}
+    }
+}
 {{- if .Children}}
 #[derive(Debug, Subcommand)]
 pub enum {{.SubcommandType}} {
@@ -77,6 +186,29 @@ pub enum {{.SubcommandType}} {
     #[command({{.Attributes}})]
     {{.Variant}}({{.ArgsType}}),
 {{- end}}
+}
+
+impl {{.SubcommandType}} {
+    async fn dispatch<H: Handler>(
+        self,
+        globals: &GlobalArgs,
+{{- range .ChildAncestors}}
+        {{.Name}}: &{{.Type}},
+{{- end}}
+        handler: &mut H,
+    ) -> Result<(), H::Error> {
+        match self {
+{{- range .Children}}
+            Self::{{.Variant}}(args) => args.dispatch(
+                globals,
+{{- range .Ancestors}}
+                {{.Name}},
+{{- end}}
+                handler,
+            ).await,
+{{- end}}
+        }
+    }
 }
 
 {{range .Children}}{{template "node" .}}{{end -}}
