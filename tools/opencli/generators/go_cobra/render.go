@@ -1,10 +1,10 @@
-package codegen
+package go_cobra
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/opencli-dev/opencli/tools/opencli/spec"
+	spec "github.com/opencli-dev/opencli/tools/opencli/ir"
 )
 
 // generator holds state shared across every file rendered for one spec.
@@ -86,8 +86,12 @@ func (g *generator) ownFlagsAndArgs(w *strings.Builder, c spec.Command, scope st
 		args[i] = classifyArgument(a, scope)
 	}
 
-	renderEnumTypes(w, allFlags, args)
-	renderParamsStruct(w, scope, allFlags, args)
+	if err := renderEnumTypes(w, allFlags, args); err != nil {
+		return nil, nil, 0, "", err
+	}
+	if err := renderParamsStruct(w, scope, allFlags, args); err != nil {
+		return nil, nil, 0, "", err
+	}
 
 	outputType, err = resolveOutputType(c.Output)
 	if err != nil {
@@ -211,33 +215,25 @@ func (g *generator) renderGroup(w *strings.Builder, c spec.Command, topLevel boo
 
 	funcName, returnType := ctorSignature(fullName, topLevel)
 
-	sig := make([]string, len(params))
-	for i, p := range params {
-		sig[i] = fmt.Sprintf("%s %s", p.VarName, p.TypeName)
+	data := groupTemplateData{
+		Function: funcName, ReturnType: returnType, Parameters: params,
+		Use: goStringLiteral(c.Name), Children: childResults,
+		Return: castTo(returnType, "cmd"),
 	}
-	fmt.Fprintf(w, "\nfunc %s(\n\t%s,\n) %s {\n", funcName, strings.Join(sig, ",\n\t"), returnType)
-
-	fmt.Fprintf(w, "\tcmd := &cobra.Command{\n\t\tUse:   %s,\n", goStringLiteral(c.Name))
 	if c.Description != "" {
-		fmt.Fprintf(w, "\t\tShort: %s,\n", goStringLiteral(c.Description))
+		data.Short = goStringLiteral(c.Description)
 	}
 	if c.LongDescription != "" {
-		fmt.Fprintf(w, "\t\tLong: %s,\n", goRawOrQuoted(c.LongDescription))
+		data.Long = goRawOrQuoted(c.LongDescription)
 	}
 	if len(c.Aliases) > 0 {
-		fmt.Fprintf(w, "\t\tAliases: %s,\n", goStringSliceLiteral(c.Aliases))
+		data.Aliases = goStringSliceLiteral(c.Aliases)
 	}
-	w.WriteString("\t}\n\n")
-
-	if len(childResults) > 0 {
-		w.WriteString("\tcmd.AddCommand(\n")
-		for _, r := range childResults {
-			fmt.Fprintf(w, "\t\t%s,\n", r.CtorExpr)
-		}
-		w.WriteString("\t)\n\n")
+	source, err := executeTemplate("group", data)
+	if err != nil {
+		return nodeResult{}, err
 	}
-
-	fmt.Fprintf(w, "\treturn %s\n}\n", castTo(returnType, "cmd"))
+	w.WriteString(source)
 
 	callArgs := make([]string, len(params))
 	for i, p := range params {
@@ -247,6 +243,18 @@ func (g *generator) renderGroup(w *strings.Builder, c spec.Command, topLevel boo
 		CtorExpr: fmt.Sprintf("%s(\n\t\t%s,\n\t)", funcName, strings.Join(callArgs, ",\n\t\t")),
 		Params:   params,
 	}, nil
+}
+
+type groupTemplateData struct {
+	Function   string
+	ReturnType string
+	Parameters []handlerParam
+	Use        string
+	Short      string
+	Long       string
+	Aliases    string
+	Children   []nodeResult
+	Return     string
 }
 
 // ctorSignature returns the constructor function name and return type for a
@@ -268,47 +276,83 @@ func castTo(returnType, expr string) string {
 	return fmt.Sprintf("%s(%s)", returnType, expr)
 }
 
-func renderEnumTypes(w *strings.Builder, flags []resolvedFlag, args []resolvedArgument) {
+func renderEnumTypes(w *strings.Builder, flags []resolvedFlag, args []resolvedArgument) error {
 	for _, f := range flags {
 		if f.Kind == kindEnum {
-			renderEnumType(w, f.EnumType, f.Choices)
+			if err := renderEnumType(w, f.EnumType, f.Choices); err != nil {
+				return err
+			}
 		}
 	}
 	for _, a := range args {
 		if a.Kind == kindEnum {
-			renderEnumType(w, a.EnumType, a.Choices)
+			if err := renderEnumType(w, a.EnumType, a.Choices); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
-func renderEnumType(w *strings.Builder, typeName string, choices []string) {
-	fmt.Fprintf(w, "\ntype %s string\n\nconst (\n", typeName)
-	for _, c := range choices {
-		fmt.Fprintf(w, "\t%s%s %s = %s\n", typeName, pascalCase(c), typeName, goStringLiteral(c))
+func renderEnumType(w *strings.Builder, typeName string, choices []string) error {
+	data := enumTemplateData{Name: typeName}
+	for _, choice := range choices {
+		data.Choices = append(data.Choices, enumChoiceTemplateData{
+			Constant: typeName + pascalCase(choice),
+			Value:    goStringLiteral(choice),
+		})
 	}
-	w.WriteString(")\n")
+	source, err := executeTemplate("enum", data)
+	if err != nil {
+		return err
+	}
+	w.WriteString("\n" + source)
+	return nil
 }
 
-func renderParamsStruct(w *strings.Builder, scope string, flags []resolvedFlag, args []resolvedArgument) {
-	fmt.Fprintf(w, "\ntype %sParams struct {\n", scope)
+func renderParamsStruct(w *strings.Builder, scope string, flags []resolvedFlag, args []resolvedArgument) error {
+	data := paramsTemplateData{Name: scope}
 	for _, f := range flags {
 		goType := f.Kind.goType(f.EnumType)
 		if f.Kind == kindStringArray || f.Kind == kindStringSlice {
 			goType = "[]string"
 		}
-		fmt.Fprintf(w, "\t%s %s\n", f.FieldName, goType)
-		if f.TrackChanged {
-			fmt.Fprintf(w, "\t%sSet bool\n", f.FieldName)
-		}
+		data.Fields = append(data.Fields, fieldTemplateData{Name: f.FieldName, Type: goType, TrackChanged: f.TrackChanged})
 	}
 	for _, a := range args {
 		goType := a.Kind.goType(a.EnumType)
 		if a.Variadic {
 			goType = "[]string"
 		}
-		fmt.Fprintf(w, "\t%s %s\n", a.FieldName, goType)
+		data.Fields = append(data.Fields, fieldTemplateData{Name: a.FieldName, Type: goType})
 	}
-	w.WriteString("}\n")
+	source, err := executeTemplate("params", data)
+	if err != nil {
+		return err
+	}
+	w.WriteString("\n" + source)
+	return nil
+}
+
+type enumTemplateData struct {
+	Name    string
+	Choices []enumChoiceTemplateData
+}
+
+type enumChoiceTemplateData struct {
+	Constant string
+	Value    string
+}
+
+type paramsTemplateData struct {
+	Name   string
+	Fields []fieldTemplateData
+}
+
+type fieldTemplateData struct {
+	Name         string
+	Type         string
+	TrackChanged bool
 }
 
 func goRawOrQuoted(s string) string {

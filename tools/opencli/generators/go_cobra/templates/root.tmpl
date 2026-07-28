@@ -1,0 +1,29 @@
+{{define "root" -}}
+func NewRootCommand(
+	{{- range .Parameters}}
+	{{.VarName}} {{.TypeName}},
+	{{- end}}
+) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: {{.Use}},
+		{{- if .Short}}
+		Short: {{.Short}},
+		{{- end}}
+		{{- if .Long}}
+		Long: {{.Long}},
+		{{- end}}
+	}
+
+	{{- range .PersistentFlags}}
+	{{.}}
+	{{- end}}
+
+	cmd.AddCommand(
+		{{- range .Parameters}}
+		(*cobra.Command)({{.VarName}}),
+		{{- end}}
+	)
+
+	return cmd
+}
+{{- end}}

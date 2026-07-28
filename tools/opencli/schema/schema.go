@@ -7,7 +7,7 @@ package schema
 
 import _ "embed"
 
-//go:generate cp ../../../../schema/opencli.schema.json ./opencli.schema.json
+//go:generate cp ../../../schema/opencli.schema.json ./opencli.schema.json
 
 // OpenCLI is the OpenCLI JSON Schema (Draft 2020-12), embedded at build time.
 //

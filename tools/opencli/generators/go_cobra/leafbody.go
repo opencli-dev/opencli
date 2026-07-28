@@ -1,10 +1,10 @@
-package codegen
+package go_cobra
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/opencli-dev/opencli/tools/opencli/spec"
+	spec "github.com/opencli-dev/opencli/tools/opencli/ir"
 )
 
 // renderLeafBody writes the body of a leaf (or hybrid leaf-and-group)

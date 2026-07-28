@@ -1,10 +1,10 @@
-package codegen
+package go_cobra
 
 import (
 	"fmt"
 	"strconv"
 
-	"github.com/opencli-dev/opencli/tools/opencli/spec"
+	spec "github.com/opencli-dev/opencli/tools/opencli/ir"
 )
 
 // flagKind classifies how a flag or argument is registered with pflag and
@@ -14,16 +14,16 @@ import (
 type flagKind int
 
 const (
-	kindString flagKind = iota
-	kindUUID            // format: uuid — parsed into uuid.UUID
-	kindDuration        // format: duration — native pflag Duration
+	kindString   flagKind = iota
+	kindUUID              // format: uuid — parsed into uuid.UUID
+	kindDuration          // format: duration — native pflag Duration
 	kindInt
 	kindFloat
 	kindBool
-	kindCount        // count: true — native pflag Count, always int
-	kindEnum         // choices present — named string type with constants
-	kindStringArray  // repeatable, no comma-splitting (Cobra StringArrayVar)
-	kindStringSlice  // repeatable + splitOnComma (Cobra StringSliceVar)
+	kindCount       // count: true — native pflag Count, always int
+	kindEnum        // choices present — named string type with constants
+	kindStringArray // repeatable, no comma-splitting (Cobra StringArrayVar)
+	kindStringSlice // repeatable + splitOnComma (Cobra StringSliceVar)
 )
 
 // resolvedFlag is a flag together with everything codegen needs to emit it:

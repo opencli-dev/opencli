@@ -14,8 +14,8 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
-	"github.com/opencli-dev/opencli/tools/opencli/internal/lint"
-	"github.com/opencli-dev/opencli/tools/opencli/internal/schema"
+	"github.com/opencli-dev/opencli/tools/opencli/lint"
+	"github.com/opencli-dev/opencli/tools/opencli/schema"
 	"github.com/opencli-dev/opencli/tools/opencli/spec"
 )
 

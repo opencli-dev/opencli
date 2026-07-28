@@ -1,10 +1,11 @@
-// Package codegen turns a validated OpenCLI spec.Spec into Go source: one
+// Package go_cobra implements the go-cobra generator. It turns a validated
+// OpenCLI IR into Go source: one
 // file per top-level command (a Handler func type, a Params struct, and a
 // constructor building the parsed *cobra.Command), plus a shared file and a
 // root command assembler. It never emits business logic — every generated
 // constructor's RunE only parses and validates the command line, then hands
 // a typed Params value to a caller-supplied Handler.
-package codegen
+package go_cobra
 
 import (
 	"bytes"
@@ -13,42 +14,49 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opencli-dev/opencli/tools/opencli/spec"
+	"github.com/spf13/pflag"
+
+	genapi "github.com/opencli-dev/opencli/tools/opencli/generator"
+	opencliir "github.com/opencli-dev/opencli/tools/opencli/ir"
 )
 
-// Generate renders a full set of Go files for s into pkg. s is expected to
-// have already passed validate.Check (structural + semantic); Generate
-// re-resolves $refs itself but does not re-run lint checks, so a spec with
-// dangling refs or ordering problems will produce incorrect or non-compiling
-// output rather than a clean error.
-func Generate(s *spec.Spec, pkg string) (map[string][]byte, error) {
-	r := newResolver(s)
+const tag = "go-cobra"
 
-	rawGlobalFlags, err := r.flags(s.Flags)
-	if err != nil {
-		return nil, err
-	}
-	globalFlags := make([]resolvedFlag, len(rawGlobalFlags))
-	for i, f := range rawGlobalFlags {
+type cobraGenerator struct{ packageName string }
+
+func init() {
+	genapi.Register(tag, func() genapi.Generator { return &cobraGenerator{packageName: "cligen"} })
+}
+
+func (*cobraGenerator) Short() string { return "Generate Go command scaffolding using Cobra" }
+
+func (*cobraGenerator) Long() string {
+	return "Generate typed Go handlers, parameter structs, Cobra constructors, schema types, and a root command assembler."
+}
+
+func (g *cobraGenerator) ConfigureFlags(flags *pflag.FlagSet) {
+	flags.StringVar(&g.packageName, "package", "cligen", "Go package name for generated files")
+}
+
+// Generate renders a full set of Go files from normalized OpenCLI IR.
+func (g *cobraGenerator) Generate(s *opencliir.IR) ([]genapi.GeneratedFile, error) {
+	pkg := g.packageName
+	globalFlags := make([]resolvedFlag, len(s.Flags))
+	for i, f := range s.Flags {
 		globalFlags[i] = classifyFlag(f, "Global")
 	}
 
-	commands, err := r.commands(s.Commands)
-	if err != nil {
-		return nil, err
-	}
+	renderer := &generator{globalFlags: globalFlags}
 
-	g := &generator{globalFlags: globalFlags}
-
-	files := map[string][]byte{}
+	var files []genapi.GeneratedFile
 	var tops []topEntry
 
-	for _, c := range commands {
+	for _, c := range s.Commands {
 		var body strings.Builder
 		// The returned nodeResult.CtorExpr is only meaningful to a parent
 		// group node; top-level commands are wired externally (e.g. by fx),
 		// not called from root, so it's discarded here.
-		_, err := g.renderNode(&body, c, true, "")
+		_, err := renderer.renderNode(&body, c, true, "")
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +68,7 @@ func Generate(s *spec.Spec, pkg string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("command %q: %w", c.Name, err)
 		}
-		files[fileName(c.Name)] = src
+		files = append(files, genapi.GeneratedFile{Path: fileName(c.Name), Content: src})
 
 		tops = append(tops, topEntry{
 			VarName:  camelCase(c.Name),
@@ -68,24 +76,33 @@ func Generate(s *spec.Spec, pkg string) (map[string][]byte, error) {
 		})
 	}
 
-	files["opencli.gen.go"], err = assembleFile(pkg, renderShared())
+	sharedBody, err := renderShared()
 	if err != nil {
 		return nil, err
 	}
+	shared, err := assembleFile(pkg, sharedBody)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, genapi.GeneratedFile{Path: "opencli.gen.go", Content: shared})
 
-	if s.Components != nil && len(s.Components.Schemas) > 0 {
-		files["schemas.gen.go"], err = generateSchemaTypes(s.Components.Schemas, pkg)
+	if s.Schema != nil && len(s.Schema.Types) > 0 {
+		schemas, err := generateSchemaTypes(s.Schema, pkg)
 		if err != nil {
 			return nil, err
 		}
+		files = append(files, genapi.GeneratedFile{Path: "schemas.gen.go", Content: schemas})
 	}
 
 	var root strings.Builder
-	renderRoot(&root, s, globalFlags, tops)
-	files["root.gen.go"], err = assembleFile(pkg, root.String())
+	if err := renderRoot(&root, s, globalFlags, tops); err != nil {
+		return nil, err
+	}
+	rootSource, err := assembleFile(pkg, root.String())
 	if err != nil {
 		return nil, err
 	}
+	files = append(files, genapi.GeneratedFile{Path: "root.gen.go", Content: rootSource})
 
 	return files, nil
 }

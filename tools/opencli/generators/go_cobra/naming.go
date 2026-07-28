@@ -1,4 +1,4 @@
-package codegen
+package go_cobra
 
 import "strings"
 

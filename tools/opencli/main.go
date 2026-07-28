@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/opencli-dev/opencli/tools/opencli/internal/cli"
+	"github.com/opencli-dev/opencli/tools/opencli/cli"
 )
 
 func main() {

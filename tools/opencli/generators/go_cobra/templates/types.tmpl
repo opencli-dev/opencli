@@ -1,0 +1,20 @@
+{{define "enum" -}}
+type {{.Name}} string
+
+const (
+	{{- range .Choices}}
+	{{.Constant}} {{$.Name}} = {{.Value}}
+	{{- end}}
+)
+{{- end}}
+
+{{define "params" -}}
+type {{.Name}}Params struct {
+	{{- range .Fields}}
+	{{.Name}} {{.Type}}
+	{{- if .TrackChanged}}
+	{{.Name}}Set bool
+	{{- end}}
+	{{- end}}
+}
+{{- end}}

@@ -1,0 +1,30 @@
+{{define "group" -}}
+func {{.Function}}(
+	{{- range .Parameters}}
+	{{.VarName}} {{.TypeName}},
+	{{- end}}
+) {{.ReturnType}} {
+	cmd := &cobra.Command{
+		Use: {{.Use}},
+		{{- if .Short}}
+		Short: {{.Short}},
+		{{- end}}
+		{{- if .Long}}
+		Long: {{.Long}},
+		{{- end}}
+		{{- if .Aliases}}
+		Aliases: {{.Aliases}},
+		{{- end}}
+	}
+
+	{{- if .Children}}
+	cmd.AddCommand(
+		{{- range .Children}}
+		{{.CtorExpr}},
+		{{- end}}
+	)
+
+	{{- end}}
+	return {{.Return}}
+}
+{{- end}}

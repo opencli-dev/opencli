@@ -1,10 +1,4 @@
-package codegen
-
-// renderShared returns the body (package clause and imports are added by
-// assembleFile) of opencli.gen.go: the small set of helpers every other
-// generated file in the package relies on.
-func renderShared() string {
-	return `
+{{define "shared" -}}
 type IO struct {
 	In  io.Reader
 	Out io.Writer
@@ -34,5 +28,4 @@ func mustParseDuration(s string) time.Duration {
 	}
 	return d
 }
-`
-}
+{{- end}}

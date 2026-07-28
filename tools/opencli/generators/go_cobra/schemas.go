@@ -1,85 +1,20 @@
-package codegen
+package go_cobra
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/Southclaws/schemancer/schemancer"
 	"github.com/Southclaws/schemancer/schemancer/generators"
 	"github.com/Southclaws/schemancer/schemancer/generators/golang"
 	"github.com/Southclaws/schemancer/schemancer/ir"
-	"github.com/google/jsonschema-go/jsonschema"
 
-	"github.com/opencli-dev/opencli/tools/opencli/spec"
+	spec "github.com/opencli-dev/opencli/tools/opencli/ir"
 )
-
-const componentsSchemaRefPrefix = "#/components/schemas/"
-
-// buildSchemaDocument reshapes an OpenCLI spec's components.schemas map into
-// a single JSON Schema document schemancer can consume: schemancer discovers
-// named types from a document's $defs, not a nested components.schemas map,
-// so every schema is rehosted under $defs and every $ref that pointed at
-// #/components/schemas/X is rewritten to #/$defs/X.
-func buildSchemaDocument(schemas map[string]json.RawMessage) (*jsonschema.Schema, error) {
-	defs := make(map[string]any, len(schemas))
-	for name, raw := range schemas {
-		var value any
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, fmt.Errorf("components.schemas.%s: %w", name, err)
-		}
-		defs[name] = rewriteComponentRefs(value)
-	}
-
-	data, err := json.Marshal(map[string]any{"$defs": defs})
-	if err != nil {
-		return nil, err
-	}
-
-	var doc jsonschema.Schema
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("assembling schema document: %w", err)
-	}
-
-	return &doc, nil
-}
-
-// rewriteComponentRefs walks a decoded JSON value, rewriting every "$ref"
-// string that points into #/components/schemas/ to point into #/$defs/
-// instead, leaving every other value untouched.
-func rewriteComponentRefs(value any) any {
-	switch v := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(v))
-		for key, child := range v {
-			if key == "$ref" {
-				if ref, ok := child.(string); ok && strings.HasPrefix(ref, componentsSchemaRefPrefix) {
-					out[key] = "#/$defs/" + strings.TrimPrefix(ref, componentsSchemaRefPrefix)
-					continue
-				}
-			}
-			out[key] = rewriteComponentRefs(child)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i, child := range v {
-			out[i] = rewriteComponentRefs(child)
-		}
-		return out
-	default:
-		return value
-	}
-}
 
 // generateSchemaTypes turns an OpenCLI spec's components.schemas into Go
 // source declaring one type per schema, via schemancer.
-func generateSchemaTypes(schemas map[string]json.RawMessage, pkg string) ([]byte, error) {
-	doc, err := buildSchemaDocument(schemas)
-	if err != nil {
-		return nil, err
-	}
-
+func generateSchemaTypes(schema *ir.IR, pkg string) ([]byte, error) {
 	opts := generators.GlobalOptions{
 		Language: generators.LanguageGo,
 		// schemancer's default "uri" mapping (net/url.URL) has no JSON
@@ -90,7 +25,7 @@ func generateSchemaTypes(schemas map[string]json.RawMessage, pkg string) ([]byte
 			ir.IRFormatURI: {Type: "string"},
 		},
 	}
-	files, err := schemancer.Generate(doc, opts, golang.WithPackageName(pkg))
+	files, err := (&golang.Generator{}).Generate(schema, generators.GeneratorOptions{FormatMappings: opts.FormatTypeMapping}, golang.WithPackageName(pkg))
 	if err != nil {
 		return nil, fmt.Errorf("schemancer: %w", err)
 	}

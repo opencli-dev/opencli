@@ -26,6 +26,29 @@ The OpenCLI JSON Schema is available at:
 
 Much like OpenAPI, an OpenCLI spec defines top level schema parts for entrypoints (commands, subcommands), schemas (structured output types), flags and other components of a CLI.
 
+## Code generation
+
+Generators are identified by a `<language>-<framework>` tag so that multiple
+frameworks can coexist for the same language. The built-in generators are
+`go-cobra` and `rust-clap`.
+
+```sh
+opencli generate go-cobra opencli.yaml \
+  --package cligen \
+  --output ./internal/cligen
+
+opencli generate rust-clap opencli.yaml \
+  --module opencli_gen \
+  --output ./src
+```
+
+Each generator is a separate package with its own help and flags. Specifications
+are validated and converted into a shared, language-neutral IR before a
+generator runs; component schemas use Schemancer's generic schema IR. Source
+layouts are embedded Go templates. Generator packages use underscore-separated
+language/framework names such as `go_cobra` and `rust_clap`, while CLI tags use
+their hyphenated equivalents.
+
 ## Inspiration
 
 - [OpenAPI](https://www.openapis.org/)
