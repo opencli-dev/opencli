@@ -3,6 +3,8 @@ package cli
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestGeneratedFilePath(t *testing.T) {
@@ -26,7 +28,7 @@ func TestGeneratedFilePath(t *testing.T) {
 }
 
 func TestGeneratorCommandsOwnTheirFlags(t *testing.T) {
-	cmd := newGenerateCmd()
+	cmd := (*cobra.Command)(NewGenerateCommand(generateGoCobraHandler, generateRustClapHandler))
 	goCommand, _, err := cmd.Find([]string{"go-cobra"})
 	if err != nil {
 		t.Fatal(err)

@@ -23,10 +23,18 @@ import (
 const tag = "rust-clap"
 
 func init() {
-	genapi.Register(tag, func() genapi.Generator { return &generator{module: "opencli_gen"} })
+	genapi.Register(tag, func() genapi.Generator { return New("opencli_gen") })
 }
 
 type generator struct{ module string }
+
+// New creates a rust-clap generator whose output module is module.
+func New(module string) genapi.Generator {
+	if module == "" {
+		module = "opencli_gen"
+	}
+	return &generator{module: module}
+}
 
 func (*generator) Short() string { return "Generate Rust command scaffolding using Clap" }
 
@@ -35,7 +43,7 @@ func (*generator) Long() string {
 }
 
 func (g *generator) ConfigureFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&g.module, "module", "opencli_gen", "Rust module and output filename (without .rs)")
+	flags.StringVar(&g.module, "module", g.module, "Rust module and output filename (without .rs)")
 }
 
 //go:embed templates/*.tmpl

@@ -25,7 +25,15 @@ const tag = "go-cobra"
 type cobraGenerator struct{ packageName string }
 
 func init() {
-	genapi.Register(tag, func() genapi.Generator { return &cobraGenerator{packageName: "cligen"} })
+	genapi.Register(tag, func() genapi.Generator { return New("cligen") })
+}
+
+// New creates a go-cobra generator for packageName.
+func New(packageName string) genapi.Generator {
+	if packageName == "" {
+		packageName = "cligen"
+	}
+	return &cobraGenerator{packageName: packageName}
 }
 
 func (*cobraGenerator) Short() string { return "Generate Go command scaffolding using Cobra" }
@@ -35,7 +43,7 @@ func (*cobraGenerator) Long() string {
 }
 
 func (g *cobraGenerator) ConfigureFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&g.packageName, "package", "cligen", "Go package name for generated files")
+	flags.StringVar(&g.packageName, "package", g.packageName, "Go package name for generated files")
 }
 
 // Generate renders a full set of Go files from normalized OpenCLI IR.

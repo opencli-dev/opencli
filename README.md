@@ -49,6 +49,15 @@ layouts are embedded Go templates. Generator packages use underscore-separated
 language/framework names such as `go_cobra` and `rust_clap`, while CLI tags use
 their hyphenated equivalents.
 
+OpenCLI dogfoods the specification: the `opencli` command is described by
+`tools/opencli/opencli.yaml`, and its Cobra command tree is generated into the
+`cli` package. Regenerate it with:
+
+```sh
+cd tools/opencli
+go generate ./cli
+```
+
 ## Inspiration
 
 - [OpenAPI](https://www.openapis.org/)
